@@ -1,0 +1,41 @@
+ .classpath                                         | 17 +++++++++
+ .project                                           | 11 ++++++
+ .settings/org.eclipse.core.resources.prefs         |  2 ++
+ .settings/org.eclipse.jdt.core.prefs               |  2 ++
+ specs/overdue.md                                   | 42 ++++++++++++++++++++++
+ .../com/taskflow/controller/TaskController.java    | 10 +++++-
+ .../java/com/taskflow/service/TaskService.java     | 11 ++++++
+ .../com/taskflow/slice/TaskControllerTest.java     | 20 +++++++++++
+ .../java/com/taskflow/unit/TaskServiceTest.java    | 23 ++++++++++++
+ 9 files changed, 137 insertions(+), 1 deletion(-)
+20	0	src/test/java/com/taskflow/slice/TaskControllerTest.java
+23	0	src/test/java/com/taskflow/unit/TaskServiceTest.java
+
++    /**
++     * Devuelve las tareas vencidas de TODOS los proyectos, ordenadas por dueDate ascendente.
++     * Regla de vencimiento: delegar en Task.estaVencida().
++     */
++        // Preparar tareas vencidas con fechas distintas; el stub devuelve ya ordenadas o no, el controller debe respetar el orden del service
++        // asignar dueDates reales: t1 vencida ayer, t2 vencida hace 5 d├¡as
++            // Preparar tareas: una vencida (dueDate ayer), una con fecha pasada pero DONE, una sin dueDate
++            // Debe traer solo las vencidas (vencida1 y vencida2), en orden POR_FECHA asc (mas antigua primero)
+
+MUTANTE: quitado .sorted(TaskOrders.POR_FECHA) de vencidas()
+
+[ERROR] Tests run: 8, Failures: 1, Errors: 0, Skipped: 0
+[INFO] BUILD FAILURE
+RESTAURADO: TaskService.java quedó exactamente como estaba.
+
+
++                .andExpect(jsonPath("$[1].id").value(7))
++                .andExpect(jsonPath("$[1].title").value("Corregir bug de fechas"));
+
+
++     * Regla de vencimiento: delegar en Task.estaVencida().
++                .filter(Task::estaVencida)
++                .sorted(TaskOrders.POR_FECHA)
+
+
+[INFO] Tests run: 69, Failures: 0, Errors: 0, Skipped: 0
+[INFO] BUILD SUCCESS
+
