@@ -109,6 +109,14 @@ class TaskControllerTest {
     }
 
     @Test
+    void getTaskPorId_idNoNumerico_devuelve400() throws Exception {
+        // Regresión: con ruta literal /tasks/{id} el parámetro no numérico provoca TypeMismatch -> 400 mapeado por el advice
+        mockMvc.perform(get("/tasks/abc"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status").value(400));
+    }
+
+    @Test
     void getTasksOverdue_retorna200YListaOrdenada() throws Exception {
         // Preparar tareas vencidas con fechas distintas; el stub devuelve ya ordenadas o no, el controller debe respetar el orden del service
         Task t1 = tareaCon(7L, "Corregir bug de fechas", TaskStatus.IN_PROGRESS, 1L);
