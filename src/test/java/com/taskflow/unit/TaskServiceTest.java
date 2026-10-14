@@ -186,4 +186,35 @@ class TaskServiceTest {
             org.junit.jupiter.api.Assertions.assertEquals(7L, resultado.get(1).getId());
         }
     }
+
+    @Nested
+    @DisplayName("SinResponsable")
+    class SinResponsable {
+
+        @Test
+        void sinResponsable_filtraYOrdenaPorFecha() throws TaskValidationException {
+            // El repositorio devuelve, en este orden: sin@+10d, conAssignee, sin@ no fecha, sin@+2d
+            Task sin10 = new Task(11L, "Sin10", "desc", TaskStatus.TODO, Priority.MED, PROYECTO, null, java.time.LocalDate.now().plusDays(10));
+            Task conAssignee = tarea(12L, "ConAssignee", 5L);
+            Task sinNoDate = new Task(13L, "SinNoDate", "desc", TaskStatus.TODO, Priority.MED, PROYECTO, null, null);
+            Task sin2 = new Task(14L, "Sin2", "desc", TaskStatus.TODO, Priority.MED, PROYECTO, null, java.time.LocalDate.now().plusDays(2));
+
+            when(repository.findAll()).thenReturn(java.util.List.of(sin10, conAssignee, sinNoDate, sin2));
+
+            java.util.List<Task> resultado = service.sinResponsable();
+
+            java.util.List<Long> ids = resultado.stream().map(Task::getId).toList();
+            org.junit.jupiter.api.Assertions.assertEquals(java.util.List.of(14L, 11L, 13L), ids);
+        }
+
+        @Test
+        void sinResponsable_soloConAssignee_devuelveVacio() {
+            Task con = tarea(21L, "Con", 1L);
+            when(repository.findAll()).thenReturn(java.util.List.of(con));
+
+            java.util.List<Task> resultado = service.sinResponsable();
+
+            org.junit.jupiter.api.Assertions.assertTrue(resultado.isEmpty());
+        }
+    }
 }
