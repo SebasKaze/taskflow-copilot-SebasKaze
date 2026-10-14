@@ -163,4 +163,27 @@ class TaskServiceTest {
             throw new IllegalStateException("dato de prueba inválido", e);
         }
     }
+
+    @Nested
+    @DisplayName("vencidas")
+    class Vencidas {
+
+        @Test
+        void vencidas_devuelveSoloLasVencidasYOrdenadas() throws TaskValidationException {
+            // Preparar tareas: una vencida (dueDate ayer), una con fecha pasada pero DONE, una sin dueDate
+            Task vencida1 = new Task(7L, "Atrasada", "desc", TaskStatus.IN_PROGRESS, Priority.MED, PROYECTO, 2L, java.time.LocalDate.now().minusDays(2));
+            Task vencida2 = new Task(9L, "Mas atrasada", "desc", TaskStatus.IN_PROGRESS, Priority.MED, PROYECTO, 3L, java.time.LocalDate.now().minusDays(5));
+            Task donePasada = new Task(8L, "Hecha", "desc", TaskStatus.DONE, Priority.MED, PROYECTO, 4L, java.time.LocalDate.now().minusDays(3));
+            Task sinFecha = new Task(10L, "SinFecha", "desc", TaskStatus.IN_PROGRESS, Priority.MED, PROYECTO, 5L, null);
+
+            when(repository.findAll()).thenReturn(java.util.List.of(vencida1, vencida2, donePasada, sinFecha));
+
+            java.util.List<Task> resultado = service.vencidas();
+
+            // Debe traer solo las vencidas (vencida1 y vencida2), en orden POR_FECHA asc (mas antigua primero)
+            org.junit.jupiter.api.Assertions.assertEquals(2, resultado.size());
+            org.junit.jupiter.api.Assertions.assertEquals(9L, resultado.get(0).getId());
+            org.junit.jupiter.api.Assertions.assertEquals(7L, resultado.get(1).getId());
+        }
+    }
 }

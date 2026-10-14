@@ -122,4 +122,15 @@ public class TaskService {
                 .filter(t -> t.getPriority() == priority)
                 .toList();
     }
+
+    /**
+     * Devuelve las tareas vencidas de TODOS los proyectos, ordenadas por dueDate ascendente.
+     * Regla de vencimiento: delegar en Task.estaVencida().
+     */
+    public List<Task> vencidas() {
+        return repository.findAll().stream()
+                .filter(Task::estaVencida)
+                .sorted(TaskOrders.POR_FECHA)
+                .toList();
+    }
 }
