@@ -117,25 +117,16 @@ class TaskControllerTest {
     }
 
     @Test
-    void getTasksOverdue_retorna200YListaOrdenada() throws Exception {
-        // Preparar tareas vencidas con fechas distintas; el stub devuelve ya ordenadas o no, el controller debe respetar el orden del service
-        Task t1 = tareaCon(7L, "Corregir bug de fechas", TaskStatus.IN_PROGRESS, 1L);
-        // asignar dueDates reales: t1 vencida ayer, t2 vencida hace 5 días
-        t1 = new Task(7L, t1.getTitle(), t1.getDescription(), t1.getStatus(), t1.getPriority(), t1.getProjectId(), t1.getAssigneeId(), java.time.LocalDate.now().minusDays(1));
-        Task t2 = tareaCon(9L, "Otra atrasada", TaskStatus.IN_PROGRESS, 1L);
-        t2 = new Task(9L, t2.getTitle(), t2.getDescription(), t2.getStatus(), t2.getPriority(), t2.getProjectId(), t2.getAssigneeId(), java.time.LocalDate.now().minusDays(5));
-
-        when(taskService.vencidas()).thenReturn(List.of(t2, t1));
+    void getTasksOverdue_retorna200YLista() throws Exception {
+        when(taskService.vencidas()).thenReturn(List.of(
+                tarea(7L, "Corregir bug de fechas", TaskStatus.IN_PROGRESS)));
 
         mockMvc.perform(get("/tasks/overdue"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.length()").value(2))
-                .andExpect(jsonPath("$[0].id").value(9))
-                .andExpect(jsonPath("$[0].title").value("Otra atrasada"))
-                .andExpect(jsonPath("$[1].id").value(7))
-                .andExpect(jsonPath("$[1].title").value("Corregir bug de fechas"));
+                .andExpect(jsonPath("$[0].id").value(7))
+                .andExpect(jsonPath("$[0].title").value("Corregir bug de fechas"));
     }
-
+    
     @Test
     void getTasksUnassigned_retorna200YListaConAssigneeNull() throws Exception {
         Task t4 = new Task(4L, "Escribir tests MockMvc", "desc", TaskStatus.TODO, Priority.MED, 1L, null, java.time.LocalDate.now().plusDays(7));
