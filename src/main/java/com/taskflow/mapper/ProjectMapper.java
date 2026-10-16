@@ -21,4 +21,11 @@ public final class ProjectMapper {
         return new ProjectResponse(p.getId(), p.getName(), p.getDescription(),
                 p.getOwnerId(), p.getCreatedAt());
     }
+
+    /** Mapea entidad -> ProjectSummaryResponse para el endpoint /projects/{id}/summary. */
+    public static com.taskflow.dto.ProjectSummaryResponse aSummary(Project p, int totalTasks,
+                                                                   java.util.Map<com.taskflow.model.TaskStatus, Integer> byStatus,
+                                                                   int overdue) {
+        return new com.taskflow.dto.ProjectSummaryResponse(p.getId(), p.getName(), totalTasks, byStatus, overdue);
+    }
 }
