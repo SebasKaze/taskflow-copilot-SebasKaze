@@ -1,0 +1,243 @@
+diff --git a/src/main/java/com/taskflow/controller/ProjectController.java b/src/main/java/com/taskflow/controller/ProjectController.java
+index bef609e..0a3c541 100644
+--- a/src/main/java/com/taskflow/controller/ProjectController.java
++++ b/src/main/java/com/taskflow/controller/ProjectController.java
+@@ -86,6 +86,19 @@ public class ProjectController {
+         return tareas.stream().map(TaskMapper::aResponse).toList();
+     }
+ 
++    /**
++     * GET /projects/{id}/summary — resumen del proyecto: cuenta tareas por estado y vencidas.
++     * 404 si el proyecto no existe; delega la lógica al ProjectService.resumen.
++     */
++    @Operation(summary = "Resumen del proyecto",
++            description = "Cuenta tareas por estado y cuántas están vencidas para pintar un tablero.")
++    @GetMapping("/projects/{id}/summary")
++    public com.taskflow.dto.ProjectSummaryResponse getProjectSummary(@PathVariable("id") Long id) {
++        Project proyecto = projectService.buscarPorId(id)
++                .orElseThrow(() -> new ProjectNotFoundException(id));
++        return projectService.resumen(proyecto);
++    }
++
+     /**
+      * POST /projects — 201 + Location a /projects/{id}. @Valid dispara Bean Validation (400 si falla).
+      * El owner sale del JWT — el Authentication (inyectado por Spring Security) trae el username
+diff --git a/src/main/java/com/taskflow/dto/ProjectSummaryResponse.java b/src/main/java/com/taskflow/dto/ProjectSummaryResponse.java
+new file mode 100644
+index 0000000..6037c78
+--- /dev/null
++++ b/src/main/java/com/taskflow/dto/ProjectSummaryResponse.java
+@@ -0,0 +1,17 @@
++package com.taskflow.dto;
++
++import com.taskflow.model.TaskStatus;
++
++import java.util.Map;
++
++/**
++ * ProjectSummaryResponse — resumen de un proyecto para el tablero.
++ */
++public record ProjectSummaryResponse(
++        Long projectId,
++        String projectName,
++        int totalTasks,
++        Map<TaskStatus, Integer> byStatus,
++        int overdue
++) {
++}
+diff --git a/src/main/java/com/taskflow/mapper/ProjectMapper.java b/src/main/java/com/taskflow/mapper/ProjectMapper.java
+index 38f44a0..3b3e40a 100644
+--- a/src/main/java/com/taskflow/mapper/ProjectMapper.java
++++ b/src/main/java/com/taskflow/mapper/ProjectMapper.java
+@@ -21,4 +21,11 @@ public final class ProjectMapper {
+         return new ProjectResponse(p.getId(), p.getName(), p.getDescription(),
+                 p.getOwnerId(), p.getCreatedAt());
+     }
++
++    /** Mapea entidad -> ProjectSummaryResponse para el endpoint /projects/{id}/summary. */
++    public static com.taskflow.dto.ProjectSummaryResponse aSummary(Project p, int totalTasks,
++                                                                   java.util.Map<com.taskflow.model.TaskStatus, Integer> byStatus,
++                                                                   int overdue) {
++        return new com.taskflow.dto.ProjectSummaryResponse(p.getId(), p.getName(), totalTasks, byStatus, overdue);
++    }
+ }
+diff --git a/src/main/java/com/taskflow/service/ProjectService.java b/src/main/java/com/taskflow/service/ProjectService.java
+index b3e9d0f..767a6c4 100644
+--- a/src/main/java/com/taskflow/service/ProjectService.java
++++ b/src/main/java/com/taskflow/service/ProjectService.java
+@@ -60,6 +60,35 @@ public class ProjectService {
+         return taskRepository.findByProjectId(projectId);
+     }
+ 
++    /**
++     * Construye el resumen del proyecto: cuenta tareas por estado y cuántas están vencidas.
++     * Recibe la entidad Project ya encontrada (el controller decide el 404).
++     */
++    public com.taskflow.dto.ProjectSummaryResponse resumen(Project project) {
++        java.util.List<Task> tareas = tareasDe(project.getId());
++        int total = tareas.size();
++        java.util.Map<com.taskflow.model.TaskStatus, Integer> byStatus = new java.util.EnumMap<>(com.taskflow.model.TaskStatus.class);
++        for (com.taskflow.model.TaskStatus s : com.taskflow.model.TaskStatus.values()) {
++            byStatus.put(s, 0);
++        }
++        int overdue = 0;
++        for (Task t : tareas) {
++            com.taskflow.model.TaskStatus s = t.getStatus();
++            byStatus.put(s, byStatus.getOrDefault(s, 0) + 1);
++            if (t.estaVencida()) {
++                overdue++;
++            }
++        }
++        return mapToSummary(project, total, byStatus, overdue);
++    }
++
++    // Método auxiliar privado para mantener el mapper centralizado en ProjectMapper cuando sea conveniente.
++    private com.taskflow.dto.ProjectSummaryResponse mapToSummary(Project project, int total,
++                                                                 java.util.Map<com.taskflow.model.TaskStatus, Integer> byStatus,
++                                                                 int overdue) {
++        return com.taskflow.mapper.ProjectMapper.aSummary(project, total, byStatus, overdue);
++    }
++
+     /**
+      * Crea un proyecto (POST): el request trae name y description; el ownerId NO es una constante
+      * — se resuelve del USERNAME AUTENTICADO (el que puso el JWT en el
+diff --git a/src/test/java/com/taskflow/slice/ProjectControllerSummaryTest.java b/src/test/java/com/taskflow/slice/ProjectControllerSummaryTest.java
+new file mode 100644
+index 0000000..1e151a1
+--- /dev/null
++++ b/src/test/java/com/taskflow/slice/ProjectControllerSummaryTest.java
+@@ -0,0 +1,63 @@
++package com.taskflow.slice;
++
++import com.taskflow.controller.ProjectController;
++import com.taskflow.dto.ProjectSummaryResponse;
++import com.taskflow.model.Project;
++import com.taskflow.model.TaskStatus;
++import com.taskflow.security.JwtAuthenticationFilter;
++import com.taskflow.service.ProjectService;
++import org.junit.jupiter.api.Test;
++import org.springframework.beans.factory.annotation.Autowired;
++import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
++import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
++import org.springframework.test.context.bean.override.mockito.MockitoBean;
++import org.springframework.test.web.servlet.MockMvc;
++
++import java.util.Map;
++import java.util.Optional;
++
++import static org.mockito.Mockito.when;
++import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
++import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
++import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
++
++@WebMvcTest(ProjectController.class)
++@AutoConfigureMockMvc(addFilters = false)
++class ProjectControllerSummaryTest {
++
++    @Autowired
++    private MockMvc mockMvc;
++
++    @MockitoBean
++    private ProjectService projectService;
++
++    @MockitoBean
++    private JwtAuthenticationFilter jwtAuthenticationFilter;
++
++    @Test
++    void getSummary_proyectoExistente_devuelve200() throws Exception {
++        Project p = new Project(2L, "App Móvil", "d", 2L, null);
++        Map<TaskStatus,Integer> byStatus = Map.of(TaskStatus.TODO,1, TaskStatus.IN_PROGRESS,2, TaskStatus.DONE,1);
++        ProjectSummaryResponse dto = new ProjectSummaryResponse(2L, "App Móvil", 4, byStatus, 1);
++        when(projectService.buscarPorId(2L)).thenReturn(Optional.of(p));
++        when(projectService.resumen(p)).thenReturn(dto);
++
++        mockMvc.perform(get("/projects/2/summary"))
++                .andExpect(status().isOk())
++                .andExpect(jsonPath("$.projectId").value(2))
++                .andExpect(jsonPath("$.projectName").value("App Móvil"))
++                .andExpect(jsonPath("$.totalTasks").value(4))
++                .andExpect(jsonPath("$.byStatus.TODO").value(1))
++                .andExpect(jsonPath("$.byStatus.IN_PROGRESS").value(2))
++                .andExpect(jsonPath("$.byStatus.DONE").value(1))
++                .andExpect(jsonPath("$.overdue").value(1));
++    }
++
++    @Test
++    void getSummary_proyectoInexistente_devuelve404() throws Exception {
++        when(projectService.buscarPorId(99L)).thenReturn(Optional.empty());
++        mockMvc.perform(get("/projects/99/summary"))
++                .andExpect(status().isNotFound())
++                .andExpect(jsonPath("$.status").value(404));
++    }
++}
+diff --git a/src/test/java/com/taskflow/unit/ProjectServiceTest.java b/src/test/java/com/taskflow/unit/ProjectServiceTest.java
+new file mode 100644
+index 0000000..b7e5401
+--- /dev/null
++++ b/src/test/java/com/taskflow/unit/ProjectServiceTest.java
+@@ -0,0 +1,65 @@
++package com.taskflow.unit;
++
++import com.taskflow.dto.ProjectSummaryResponse;
++import com.taskflow.model.Priority;
++import com.taskflow.model.Project;
++import com.taskflow.model.Task;
++import com.taskflow.model.TaskStatus;
++import com.taskflow.repository.ProjectRepository;
++import com.taskflow.repository.TaskRepository;
++import com.taskflow.repository.UserRepository;
++import com.taskflow.service.ProjectService;
++import org.junit.jupiter.api.Test;
++import org.junit.jupiter.api.extension.ExtendWith;
++import org.mockito.InjectMocks;
++import org.mockito.Mock;
++import org.mockito.junit.jupiter.MockitoExtension;
++
++import java.time.LocalDate;
++import java.util.List;
++
++import static org.junit.jupiter.api.Assertions.assertEquals;
++import static org.mockito.Mockito.when;
++
++@ExtendWith(MockitoExtension.class)
++class ProjectServiceTest {
++
++    @Mock
++    ProjectRepository projectRepository;
++    @Mock
++    TaskRepository taskRepository;
++    @Mock
++    UserRepository userRepository;
++    @InjectMocks
++    ProjectService projectService;
++
++    @Test
++    void resumen_conTareas_yVencida() throws Exception {
++        Project p = new Project(2L, "App Móvil", "d", 2L, null);
++        Task t1 = new Task(1L, "T-1", "d", TaskStatus.TODO, Priority.MED, 2L, 1L, null);
++        Task t2 = new Task(2L, "T-2", "d", TaskStatus.IN_PROGRESS, Priority.MED, 2L, 1L, LocalDate.now().minusDays(1));
++        Task t3 = new Task(3L, "T-3", "d", TaskStatus.IN_PROGRESS, Priority.MED, 2L, 1L, null);
++        Task t4 = new Task(4L, "T-4", "d", TaskStatus.DONE, Priority.MED, 2L, 1L, LocalDate.now().minusDays(10));
++        when(taskRepository.findByProjectId(2L)).thenReturn(List.of(t1,t2,t3,t4));
++
++        ProjectSummaryResponse res = projectService.resumen(p);
++        assertEquals(4, res.totalTasks());
++        assertEquals(1, res.byStatus().get(TaskStatus.TODO).intValue());
++        assertEquals(2, res.byStatus().get(TaskStatus.IN_PROGRESS).intValue());
++        assertEquals(1, res.byStatus().get(TaskStatus.DONE).intValue());
++        assertEquals(1, res.overdue());
++    }
++
++    @Test
++    void resumen_sinTareas_devuelveCeros() {
++        Project p = new Project(3L, "P3", "d", 1L, null);
++        when(taskRepository.findByProjectId(3L)).thenReturn(List.of());
++
++        ProjectSummaryResponse res = projectService.resumen(p);
++        assertEquals(0, res.totalTasks());
++        for (TaskStatus s : TaskStatus.values()) {
++            assertEquals(0, res.byStatus().get(s).intValue());
++        }
++        assertEquals(0, res.overdue());
++    }
++}
