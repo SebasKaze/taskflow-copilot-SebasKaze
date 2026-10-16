@@ -61,6 +61,35 @@ public class ProjectService {
     }
 
     /**
+     * Construye el resumen del proyecto: cuenta tareas por estado y cuántas están vencidas.
+     * Recibe la entidad Project ya encontrada (el controller decide el 404).
+     */
+    public com.taskflow.dto.ProjectSummaryResponse resumen(Project project) {
+        java.util.List<Task> tareas = tareasDe(project.getId());
+        int total = tareas.size();
+        java.util.Map<com.taskflow.model.TaskStatus, Integer> byStatus = new java.util.EnumMap<>(com.taskflow.model.TaskStatus.class);
+        for (com.taskflow.model.TaskStatus s : com.taskflow.model.TaskStatus.values()) {
+            byStatus.put(s, 0);
+        }
+        int overdue = 0;
+        for (Task t : tareas) {
+            com.taskflow.model.TaskStatus s = t.getStatus();
+            byStatus.put(s, byStatus.getOrDefault(s, 0) + 1);
+            if (t.estaVencida()) {
+                overdue++;
+            }
+        }
+        return mapToSummary(project, total, byStatus, overdue);
+    }
+
+    // Método auxiliar privado para mantener el mapper centralizado en ProjectMapper cuando sea conveniente.
+    private com.taskflow.dto.ProjectSummaryResponse mapToSummary(Project project, int total,
+                                                                 java.util.Map<com.taskflow.model.TaskStatus, Integer> byStatus,
+                                                                 int overdue) {
+        return com.taskflow.mapper.ProjectMapper.aSummary(project, total, byStatus, overdue);
+    }
+
+    /**
      * Crea un proyecto (POST): el request trae name y description; el ownerId NO es una constante
      * — se resuelve del USERNAME AUTENTICADO (el que puso el JWT en el
      * Authentication). El dueño no lo decide el cliente ni una semilla: es QUIEN llama. createdAt = hoy;
