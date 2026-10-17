@@ -42,7 +42,7 @@ index 15de844..0104552 100644
 +
 diff --git a/src/test/java/com/taskflow/slice/BusquedaTareasControllerTest.java b/src/test/java/com/taskflow/slice/BusquedaTareasControllerTest.java
 new file mode 100644
-index 0000000..7e32dce
+index 0000000..b92d330
 --- /dev/null
 +++ b/src/test/java/com/taskflow/slice/BusquedaTareasControllerTest.java
 @@ -0,0 +1,71 @@
@@ -59,7 +59,7 @@ index 0000000..7e32dce
 +import org.springframework.beans.factory.annotation.Autowired;
 +import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 +import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
-+import org.springframework.boot.test.mock.mockito.MockBean;
++import org.springframework.test.context.bean.override.mockito.MockitoBean;
 +import org.springframework.test.web.servlet.MockMvc;
 +
 +import java.util.List;
@@ -76,13 +76,13 @@ index 0000000..7e32dce
 +    @Autowired
 +    private MockMvc mockMvc;
 +
-+    @MockBean
++    @MockitoBean
 +    private TaskService taskService;
 +
-+    @MockBean
++    @MockitoBean
 +    private ProjectService projectService;
 +
-+    @MockBean
++    @MockitoBean
 +    private JwtAuthenticationFilter jwtAuthenticationFilter;
 +
 +    @Test
